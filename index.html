@@ -1,0 +1,289 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Audio Player</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            color: white;
+        }
+        .player {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            width: 400px;
+            text-align: center;
+        }
+        .track-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        .play-pause {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+        }
+        .progress-container, .volume-container {
+            margin: 15px 0;
+        }
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .playlist {
+            margin-top: 20px;
+            text-align: left;
+        }
+        .playlist h3 {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .playlist-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .playlist-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .playlist-item.active {
+            background: rgba(255, 255, 255, 0.3);
+            font-weight: bold;
+        }
+        .volume-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .volume-icon {
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="player">
+        <div id="yt-player" style="display: none;"></div>
+        
+        <div class="track-title" id="track-title">Loading...</div>
+        
+        <div class="controls">
+            <button onclick="previousTrack()">⏮</button>
+            <button class="play-pause" onclick="togglePlay()" id="play-btn">▶</button>
+            <button onclick="nextTrack()">⏭</button>
+        </div>
+        
+        <div class="progress-container">
+            <input type="range" id="progress" min="0" max="100" value="0" onchange="seekTo(this.value)">
+        </div>
+        
+        <div class="volume-container">
+            <span class="volume-icon">🔊</span>
+            <input type="range" id="volume" min="0" max="100" value="50" onchange="setVolume(this.value)">
+        </div>
+        
+        <div class="playlist">
+            <h3>Playlist</h3>
+            <div id="playlist-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let player;
+        let currentTrack = 0;
+        let isPlaying = false;
+        let playerReady = false;
+
+        const playlist = [
+            { id: "LXb3EKWsInQ", title: "Calm Piano Music" },
+            { id: "5qap5aO4i9A", title: "Lo-Fi Beats" },
+            { id: "DWcJFNfaw9c", title: "Relaxing Rain Sounds" },
+            { id: "jfKfPfyJRdk", title: "Lofi Hip Hop Radio" },
+            { id: "4xDzrJKXOOY", title: "Peaceful Guitar" }
+        ];
+
+        // Load YouTube API
+        function loadYouTubeAPI() {
+            const tag = document.createElement('script');
+            tag.src = 'https://www.youtube.com/iframe_api';
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+
+        // This function is called by the YouTube API when it's ready
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '0',
+                width: '0',
+                videoId: playlist[currentTrack].id,
+                playerVars: {
+                    'autoplay': 0,
+                    'controls': 0,
+                    'disablekb': 1,
+                    'fs': 0,
+                    'modestbranding': 1,
+                    'rel': 0
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            playerReady = true;
+            updateTrackTitle();
+            createPlaylist();
+            player.setVolume(50);
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.PLAYING) {
+                isPlaying = true;
+                document.getElementById('play-btn').innerHTML = '⏸';
+                updateProgress();
+            } else if (event.data === YT.PlayerState.PAUSED) {
+                isPlaying = false;
+                document.getElementById('play-btn').innerHTML = '▶';
+            } else if (event.data === YT.PlayerState.ENDED) {
+                nextTrack();
+            }
+        }
+
+        function togglePlay() {
+            if (!playerReady) return;
+            
+            if (isPlaying) {
+                player.pauseVideo();
+            } else {
+                player.playVideo();
+            }
+        }
+
+        function nextTrack() {
+            currentTrack = (currentTrack + 1) % playlist.length;
+            loadTrack();
+        }
+
+        function previousTrack() {
+            currentTrack = (currentTrack - 1 + playlist.length) % playlist.length;
+            loadTrack();
+        }
+
+        function loadTrack() {
+            if (!playerReady) return;
+            
+            player.loadVideoById(playlist[currentTrack].id);
+            updateTrackTitle();
+            updatePlaylistDisplay();
+        }
+
+        function playTrack(index) {
+            currentTrack = index;
+            loadTrack();
+        }
+
+        function updateTrackTitle() {
+            document.getElementById('track-title').textContent = playlist[currentTrack].title;
+        }
+
+        function createPlaylist() {
+            const container = document.getElementById('playlist-container');
+            container.innerHTML = '';
+            
+            playlist.forEach((track, index) => {
+                const item = document.createElement('div');
+                item.className = 'playlist-item';
+                item.textContent = track.title;
+                item.onclick = () => playTrack(index);
+                container.appendChild(item);
+            });
+            
+            updatePlaylistDisplay();
+        }
+
+        function updatePlaylistDisplay() {
+            const items = document.querySelectorAll('.playlist-item');
+            items.forEach((item, index) => {
+                item.classList.toggle('active', index === currentTrack);
+            });
+        }
+
+        function seekTo(value) {
+            if (!playerReady) return;
+            const duration = player.getDuration();
+            const seekTime = (value / 100) * duration;
+            player.seekTo(seekTime, true);
+        }
+
+        function setVolume(value) {
+            if (!playerReady) return;
+            player.setVolume(value);
+        }
+
+        function updateProgress() {
+            if (!playerReady || !isPlaying) return;
+            
+            const currentTime = player.getCurrentTime();
+            const duration = player.getDuration();
+            const progress = (currentTime / duration) * 100;
+            
+            document.getElementById('progress').value = progress;
+            
+            setTimeout(updateProgress, 1000);
+        }
+
+        // Initialize
+        loadYouTubeAPI();
+    </script>
+</body>
+</html>
